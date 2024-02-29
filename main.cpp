@@ -2,6 +2,7 @@
 #include<vector>
 #include<fstream>
 #include<cmath>
+#include<queue>
 const double pi=3.14, dt=0.01, g=9.81;
 inline double abs(double x){
     if(x<0) return -x;
@@ -76,20 +77,20 @@ public:
     }
 };
 class Table{
-    double L, l;
+    double L, l, pocketSize;
+    int balls;///count the balls on the table
     std::vector<Ball> v;
 public:
-    Table(double length=0, double width=0, std::vector<Ball>vt={}){
+    Table(double length=0, double width=0, double pocketSize=0, int balls_=0, std::vector<Ball>vt={}){
        L=length, l=width;
-       v=vt;
+       v=vt; balls=balls_;
     }
     std::pair<double, double> getSize(){
         return std::make_pair(L, l);
     }
     Ball getBall(int i){
         if(i<v.size())
-            return v[i];
-        ///throw exception if hitting outside vector?
+            return v[i];///how do we deal with the warning
     }
     void addBall(Ball b){
         v.push_back(b);
@@ -104,21 +105,27 @@ public:
                  v[i].collide(v[j]);
            }
            double cx=v[i].getX(), cy=v[i].getY(), R=v[i].getR();///extract coordinates, to easily check cushion ricochet
-           if(cx<R||cx+R>L)
-             v[i].hitCushion(1);
-           if(cy<R||cy+R>l)
+           if(cx<R||cx+R>L)///if it's too close to a vertical edge
+             v[i].hitCushion(1);///ricochets sideways
+           if(cy<R||cy+R>l)///all the same, ricochets
              v[i].hitCushion(0);
+           ///check if ball is potted
+           if(cx-0.5*R<0 && cy-0.5*R<0)
+              v.erase(v.begin()+i);///
        }
     }
 };
 int main(){
     std::ifstream fin("balls.txt");
     Table t(10, 7);///10 units long, 7 units wide -subject to change
-    const int ballCount=1;
+    double topSpeed=0;
     for(int i=0; i<ballCount; i++){
         Ball b(1, 0.15, 0.15, 0.1, 0.15, 0.15, Vector(0.1, 0.1));
         t.addBall(b);
+        topSpeed=max(topSpeed, b.speed());
     }
-    t.runShot();
+    while(topSpeed>0){
+        t.runShot();
+    }
     return 0;
 }
