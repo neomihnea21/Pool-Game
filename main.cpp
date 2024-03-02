@@ -4,6 +4,7 @@
 #include<cmath>
 #include<queue>
 const double pi=3.14, dt=0.01, g=9.81;
+std::ifstream fin("balls.txt");
 inline double abs(double x){
     if(x<0) return -x;
     return x;
@@ -24,6 +25,10 @@ public:
     double argument(){
         return atan2(y, x);
     }
+    void norm(){
+       double mod=sqrt(x*x+y*y);
+       x/=mod, y/=mod;
+    }
     Vector operator+(Vector &other){
         Vector v2(x+other.x, y+other.y);
         return v2;
@@ -40,6 +45,11 @@ class Ball{
 public:
     Ball(int no_=1, double x_=0, double y_=0, double r_=0, double m_=0, double mu_=0, Vector v_=0):
         no(no_), x(x_), y(y_), r(r_), m(m_), mu(mu_), v(v_) {}
+    void read(){ ///can't overload operator
+         double vx, vy;
+         fin>>no>>x>>y>>r>>m>>mu>>vx>>vy;
+         v=Vector(vx, vy);
+    }
     double getX() const{
         return x;
     }
@@ -53,6 +63,13 @@ public:
         return v.modul();
     }
     Vector getV(){ return v;}
+    void shootBall(double vx, double vy, int MAX_POWER=30){
+        Vector test(vx, vy);
+        if(test.modul()>MAX_POWER)
+            std::cout<<"PREA MULTA PUTERE";///todo throw exception here
+        else
+            v=test;
+    }
     void moveBall(){
         double vx=v.getX(), vy=v.getY();
         x+=vx*dt, y+=vy*dt; ///nudge the ball in its direction of motion
@@ -73,7 +90,12 @@ public:
         v=newV;
     }
     void collide(Ball &other){
-        return;///placeholder, TODO fully flesh out collision function
+        Vector rx(x, y), ry(other.x, other.y);
+        Vector centerLine=ry-rx; ///genuinely don't care about modulus, only azimuth
+        Vector radicalAxis(other.y-y, x-other.x);///we will swap components on this direction
+        centerLine.norm();
+        radicalAxis.norm();
+
     }
 };
 class Table{
@@ -95,6 +117,9 @@ public:
     void addBall(Ball b){
         v.push_back(b);
     }
+    int getBallCount(){
+        return v.size();
+    }
     void runShot(){
        int ctBalls=v.size();
        for(int i=0; i<ctBalls; i++){///we move the balls one at a time
@@ -110,22 +135,32 @@ public:
            if(cy<R||cy+R>l)///all the same, ricochets
              v[i].hitCushion(0);
            ///check if ball is potted
-           if(cx-0.5*R<0 && cy-0.5*R<0)
-              v.erase(v.begin()+i);///
+           //if(cx-0.5*R<0 && cy-0.5*R<0)
+              //v.erase(v.begin()+i);///
        }
     }
 };
-int main(){
-    std::ifstream fin("balls.txt");
+int main(){///TODO see what speeds we should impart
     Table t(10, 7);///10 units long, 7 units wide -subject to change
     double topSpeed=0;
+    int ballCount; fin>>ballCount;
     for(int i=0; i<ballCount; i++){
-        Ball b(1, 0.15, 0.15, 0.1, 0.15, 0.15, Vector(0.1, 0.1));
+        Ball b;
+        b.read();
         t.addBall(b);
-        topSpeed=max(topSpeed, b.speed());
+        topSpeed=std::max(topSpeed, b.getSpeed());///initial configuration of the balls
     }
-    while(topSpeed>0){
-        t.runShot();
+    ///the actual game loop
+    while(t.getBallCount()>0){
+       double vx, vy; std::cin>>vx>>vy;
+       t.getBall(0).shootBall(vx, vy);///always shoot the cue ball
+       while(topSpeed>0){
+         t.runShot();
+         topSpeed=0;
+         for(int i=0; i<ballCount; i++){
+            topSpeed=std::max(topSpeed, t.getBall(i).getSpeed());
+         }
+      }
     }
     return 0;
 }
