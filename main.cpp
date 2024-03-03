@@ -62,6 +62,9 @@ public:
     double getSpeed(){
         return v.modul();
     }
+    int getNo(){
+        return no;
+    }
     Vector getV(){ return v;}
     void shootBall(double vx, double vy, int MAX_POWER=30){
         Vector test(vx, vy);
@@ -135,11 +138,27 @@ public:
            if(cy<R||cy+R>l)///all the same, ricochets
              v[i].hitCushion(0);
            ///check if ball is potted
-           //if(cx-0.5*R<0 && cy-0.5*R<0)
-              //v.erase(v.begin()+i);///
+           if( (cx-0.5*R<0 && cy-0.5*R<0) || (cx-0.5*R<0 && cy+0.5*R>l)
+           ||  (cx+0.5*R>L && cy+0.5*R>l) || (cx+0.5*R>L && cy-0.5*R<0) ){ ///if the center is very close to a pocket, the ball is potted
+              if(v[i].getNo()==0){///if we pot the cue ball
+                std::cout<<"Ai bagat alba, se repune de la centru\n";
+                Ball newCueBall(0, L/2, l/2, 0.15, 0.1, 0.15, Vector(0, 0));///replace the cue ball mid-board
+                v[0]=newCueBall;///and move it over
+              }
+              std::cout<<"Ai bagat bila "<<i<<" \n";
+           }
        }
     }
 };
+void writeBalls(Table t){
+    std::cout<<"Avem bilele urmatoare:\n";
+    for(int i=0; i<t.getBallCount(); i++){
+      if(i==0)
+        std::cout<<"Bila alba la "<<t.getBall(i).getX()<<" "<<t.getBall(i).getY()<<"\n";
+      else
+        std::cout<<"Bila "<<i<<" la "<<t.getBall(i).getX()<<" "<<t.getBall(i).getY()<<"\n";
+    }
+}
 int main(){///TODO see what speeds we should impart
     Table t(10, 7);///10 units long, 7 units wide -subject to change
     double topSpeed=0;
@@ -151,9 +170,13 @@ int main(){///TODO see what speeds we should impart
         topSpeed=std::max(topSpeed, b.getSpeed());///initial configuration of the balls
     }
     ///the actual game loop
-    while(t.getBallCount()>0){
+    writeBalls(t);
+    //while(t.getBallCount()>0){
+       std::cout<<"Trageti in bila alba, dati puterea pe x si pe y: \n";
        double vx, vy; std::cin>>vx>>vy;
        t.getBall(0).shootBall(vx, vy);///always shoot the cue ball
+       std::cout<<t.getBall(0).getSpeed();
+       return 0;
        while(topSpeed>0){
          t.runShot();
          topSpeed=0;
@@ -161,6 +184,7 @@ int main(){///TODO see what speeds we should impart
             topSpeed=std::max(topSpeed, t.getBall(i).getSpeed());
          }
       }
-    }
+      writeBalls(t);
+    //}
     return 0;
 }
