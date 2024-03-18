@@ -3,12 +3,12 @@
 #include<fstream>
 #include<cmath>
 #include<queue>
-const double pi=3.14, dt=0.01, g=9.81;
+const double pi=3.14, dt=0.01, g=9.81, EPS=0.5;
 std::ifstream fin("balls.txt");
-inline double abs(double x){
+/*inline double abs(double x){
     if(x<0) return -x;
     return x;
-}
+}*/
 class Vector{
     double x, y;
 public:
@@ -19,7 +19,9 @@ public:
     double getY() const{
         return y;
     }
-    double modul(){
+    void setX(double x_) {x=x_;}
+    void setY(double y_) {y=y_;}///for some reason, we need setters
+    double modul() const{
         return sqrt(x*x+y*y);
     }
     double argument(){
@@ -37,7 +39,18 @@ public:
         Vector v2(x-other.x, y-other.y);
         return v2;
     }
+    friend std::ostream& operator <<(std::ostream &out, Vector &v);
+    friend std::istream& operator >>(std::istream &in, Vector &v);
+    ///for some reason, the vector's custom = fucks with everything
 };
+std::ostream& operator<<(std::ostream &out, Vector v){
+    out<<v.getX()<<" "<<v.getY()<<" ";
+    return out;
+}
+std::istream& operator >>(std::istream &in, Vector &v){
+    in>>v.x>>v.y;
+    return in;
+}
 class Ball{
     int no;
     double x, y, r, m, mu;///coordinates, radius, mass, sfc
@@ -46,9 +59,11 @@ public:
     Ball(int no_=1, double x_=0, double y_=0, double r_=0, double m_=0, double mu_=0, Vector v_=0):
         no(no_), x(x_), y(y_), r(r_), m(m_), mu(mu_), v(v_) {}
     void read(){ ///can't overload operator
-         double vx, vy;
-         fin>>no>>x>>y>>r>>m>>mu>>vx>>vy;
-         v=Vector(vx, vy);
+         fin>>no>>x>>y>>r>>m>>mu>>v;
+    }
+    void shootBall(int vx, int vy){///todo asta sa apara doar in clasa derivata cueBall, singura in care se poate da
+        Vector copie(vx, vy);
+        v=copie;
     }
     double getX() const{
         return x;
@@ -66,21 +81,14 @@ public:
         return no;
     }
     Vector getV(){ return v;}
-    void shootBall(double vx, double vy, int MAX_POWER=30){
-        Vector test(vx, vy);
-        if(test.modul()>MAX_POWER)
-            std::cout<<"PREA MULTA PUTERE";///todo throw exception here
-        else
-            v=test;
-    }
     void moveBall(){
         double vx=v.getX(), vy=v.getY();
         x+=vx*dt, y+=vy*dt; ///nudge the ball in its direction of motion
-        vx-=abs(mu*m*g*cos(v.argument()));///friction
-        vy-=abs(mu*m*g*sin(v.argument()));
-        if(vx<0) vx=0;
-        if(vy<0) vy=0;///tiny check to keep ball from rollling backwards
+        vx-=std::abs(mu*g*cos(v.argument()))*dt;///friction
+        vy-=std::abs(mu*g*sin(v.argument()))*dt;
         v=Vector(vx, vy);
+        if(v.modul()<EPS)
+            v=Vector(0, 0);
     }
     void hitCushion(int tip){
         Vector newV;
@@ -95,13 +103,17 @@ public:
     void collide(Ball &other){
         Vector rx(x, y), ry(other.x, other.y);
         Vector centerLine=ry-rx; ///genuinely don't care about modulus, only azimuth
-        Vector radicalAxis(other.y-y, x-other.x);///we will swap components on this direction
+        Vector radicalAxis(other.y-y, x-other.x);///centerLine rotated by 90 degrees
         centerLine.norm();
-        radicalAxis.norm();
-
+        radicalAxis.norm();///TODO: descompunerea lui V in partile componente se face facand produs scalar cu versorul
     }
+    friend std::ostream& operator<<(std::ostream &out, Ball b);
 };
-class Table{
+std::ostream& operator<<(std::ostream& out, Ball b){///scrie bila
+    out<<b.x<<" "<<b.y<<"\n";
+    return out;
+}
+class Table{///PUNE CC = si destructor si la masa
     double L, l, pocketSize;
     int balls;///count the balls on the table
     std::vector<Ball> v;
@@ -113,9 +125,11 @@ public:
     std::pair<double, double> getSize(){
         return std::make_pair(L, l);
     }
+    void shot(int i, int vx, int vy){
+        v[i].shootBall(vx, vy);
+    }
     Ball getBall(int i){
-        if(i<v.size())
-            return v[i];///how do we deal with the warning
+            return v[i];///how do we deal with asking for nonexistent balls
     }
     void addBall(Ball b){
         v.push_back(b);
@@ -133,10 +147,14 @@ public:
                  v[i].collide(v[j]);
            }
            double cx=v[i].getX(), cy=v[i].getY(), R=v[i].getR();///extract coordinates, to easily check cushion ricochet
-           if(cx<R||cx+R>L)///if it's too close to a vertical edge
+           if(cx<R||cx+R>L){///if it's too close to a vertical edge
              v[i].hitCushion(1);///ricochets sideways
-           if(cy<R||cy+R>l)///all the same, ricochets
+             std::cout<<"A ricosat din vertical\n";
+           }
+           if(cy<R||cy+R>l){///all the same, ricochets
              v[i].hitCushion(0);
+             std::cout<<"A ricosat din orizontal\n";
+           }
            ///check if ball is potted
            if( (cx-0.5*R<0 && cy-0.5*R<0) || (cx-0.5*R<0 && cy+0.5*R>l)
            ||  (cx+0.5*R>L && cy+0.5*R>l) || (cx+0.5*R>L && cy-0.5*R<0) ){ ///if the center is very close to a pocket, the ball is potted
@@ -145,18 +163,39 @@ public:
                 Ball newCueBall(0, L/2, l/2, 0.15, 0.1, 0.15, Vector(0, 0));///replace the cue ball mid-board
                 v[0]=newCueBall;///and move it over
               }
-              std::cout<<"Ai bagat bila "<<i<<" \n";
+              else{
+                 std::cout<<"Ai bagat bila "<<i<<" \n";
+              }
            }
        }
     }
+    ///rule of three for the tables
+    Table(const Table &other): L(other.L), l(other.l), pocketSize(other.pocketSize), v(other.v), balls(v.size()){ }
+
+    Table operator=(Table &other){
+        Table t2(other);
+        return *this;
+    }
+    ~Table(){
+        L=0, l=0, balls=0, pocketSize=0;
+        v.clear();
+    }
+    friend std::ostream &operator <<(std::ostream &out, Table t);
 };
+std::ostream &operator <<(std::ostream &out, Table t){
+    out<<t.L<<" "<<t.l<<"\n";
+    for(int i=0; i<t.v.size(); i++){
+        out<<t.v[i];
+    }
+    return out;
+}
 void writeBalls(Table t){
     std::cout<<"Avem bilele urmatoare:\n";
     for(int i=0; i<t.getBallCount(); i++){
-      if(i==0)
-        std::cout<<"Bila alba la "<<t.getBall(i).getX()<<" "<<t.getBall(i).getY()<<"\n";
+      if(t.getBall(i).getNo()==0)///cue ball is always 0
+        std::cout<<"Bila alba la "<<t.getBall(i);
       else
-        std::cout<<"Bila "<<i<<" la "<<t.getBall(i).getX()<<" "<<t.getBall(i).getY()<<"\n";
+        std::cout<<"Bila "<<i<<" la "<<t.getBall(i);
     }
 }
 int main(){///TODO see what speeds we should impart
@@ -171,12 +210,12 @@ int main(){///TODO see what speeds we should impart
     }
     ///the actual game loop
     writeBalls(t);
-    //while(t.getBallCount()>0){
+    int shots=0;
+    while(t.getBallCount()>0&&shots<5){
        std::cout<<"Trageti in bila alba, dati puterea pe x si pe y: \n";
        double vx, vy; std::cin>>vx>>vy;
-       t.getBall(0).shootBall(vx, vy);///always shoot the cue ball
-       std::cout<<t.getBall(0).getSpeed();
-       return 0;
+       t.shot(0, vx, vy);///trebuie ssa copiem toata bila, ceea ce e otara lent, dar ok
+       topSpeed=t.getBall(0).getSpeed();
        while(topSpeed>0){
          t.runShot();
          topSpeed=0;
@@ -184,7 +223,8 @@ int main(){///TODO see what speeds we should impart
             topSpeed=std::max(topSpeed, t.getBall(i).getSpeed());
          }
       }
-      writeBalls(t);
-    //}
+      writeBalls(t);///ok, pare sa plimbe bila alba pe teren, acum sa punem si restul
+      shots++;
+    }
     return 0;
 }
