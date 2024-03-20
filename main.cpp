@@ -3,12 +3,6 @@
 #include<fstream>
 #include<cmath>
 #include<queue>
-
-std::ifstream fin("balls.txt");
-/*inline double abs(double x){
-    if(x<0) return -x;
-    return x;
-}*/
 class Vector{
     double x, y;
 public:
@@ -19,8 +13,6 @@ public:
     double getY() const{
         return y;
     }
-    void setX(double x_) {x=x_;}
-    void setY(double y_) {y=y_;}///for some reason, we need setters
     double modul() const{
         return sqrt(x*x+y*y);
     }
@@ -64,9 +56,6 @@ class Ball{
 public:
     Ball(int no_=1, double x_=0, double y_=0, double r_=0, double m_=0, double mu_=0, Vector v_=0):
         no(no_), x(x_), y(y_), r(r_), m(m_), mu(mu_), v(v_) {}
-    void read(){ ///can't overload operator
-         fin>>no>>x>>y>>r>>m>>mu>>v;
-    }
     void shootBall(int vx, int vy){///todo asta sa apara doar in clasa derivata cueBall, singura in care se poate da
         Vector copie(vx, vy);
         v=copie;
@@ -119,10 +108,15 @@ public:
         v=newV1+newRad1, other.v=newV2+newRad2;///I can't add vectors freely, since rvalues are references and lvalues aren't
     }
     friend std::ostream& operator<<(std::ostream &out, Ball b);
+    friend std::istream& operator>>(std::istream &in, Ball &b);
 };
 std::ostream& operator<<(std::ostream& out, Ball b){///scrie bila
     out<<b.x<<" "<<b.y<<"\n";
     return out;
+}
+std::istream& operator>>(std::istream& in, Ball &b){
+    in>>b.no>>b.x>>b.y>>b.r>>b.m>>b.mu>>b.v;
+    return in;
 }
 class Table{
     double L, l, pocketSize;
@@ -184,7 +178,7 @@ public:
     Table(const Table &other): L(other.L), l(other.l), pocketSize(other.pocketSize), v(other.v), balls(v.size()){ }
 
     Table operator=(Table &other){
-        Table t2(other);
+        L=other.L, l=other.l;
         return *this;
     }
     ~Table(){
@@ -210,12 +204,13 @@ void writeBalls(Table t){
     }
 }
 int main(){///TODO see what speeds we should impart
+    std::ifstream fin("balls.txt");
     Table t(10, 7);///10 units long, 7 units wide -subject to change
     double topSpeed=0;
     int ballCount; fin>>ballCount;
     for(int i=0; i<ballCount; i++){
         Ball b;
-        b.read();
+        fin>>b;
         t.addBall(b);
         topSpeed=std::max(topSpeed, b.getSpeed());///initial configuration of the balls
     }
