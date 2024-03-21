@@ -52,7 +52,7 @@ class Ball{
     int no;
     double x, y, r, m, mu;///coordinates, radius, mass, sfc
     Vector v;
-    double pi=3.14, dt=0.01, g=9.81, EPS=0.5; ///nu sunt statice, ca mai sunt probleme
+    double pi=3.14, dt=0.01, g=9.81, EPS=0.3; ///nu sunt statice, ca mai sunt probleme
 public:
     Ball(int no_=1, double x_=0, double y_=0, double r_=0, double m_=0, double mu_=0, Vector v_=0):
         no(no_), x(x_), y(y_), r(r_), m(m_), mu(mu_), v(v_) {}
@@ -79,8 +79,8 @@ public:
     void moveBall(){
         double vx=v.getX(), vy=v.getY();
         x+=vx*dt, y+=vy*dt; ///nudge the ball in its direction of motion
-        vx-=std::abs(mu*g*cos(v.argument()))*dt;///friction
-        vy-=std::abs(mu*g*sin(v.argument()))*dt;
+        vx-=(mu*g*cos(v.argument()))*dt;///you wanna increase negative speeds and decrease positive ones
+        vy-=(mu*g*sin(v.argument()))*dt;
         v=Vector(vx, vy);
         if(v.modul()<EPS)
             v=Vector(0, 0);
@@ -120,12 +120,11 @@ std::istream& operator>>(std::istream& in, Ball &b){
 }
 class Table{
     double L, l, pocketSize;
-    int balls;///count the balls on the table
     std::vector<Ball> v;
 public:
-    Table(double length=0, double width=0, double pocketSize=0, int balls_=0, std::vector<Ball>vt={}){
+    Table(double length=0, double width=0, double pocketSize=0, std::vector<Ball>vt={}){
        L=length, l=width;
-       v=vt; balls=balls_;
+       v=vt;
     }
     std::pair<double, double> getSize(){
         return std::make_pair(L, l);
@@ -152,17 +151,8 @@ public:
                  v[i].collide(v[j]);
            }
            double cx=v[i].getX(), cy=v[i].getY(), R=v[i].getR();///extract coordinates, to easily check cushion ricochet
-           if(cx<R||cx+R>L){///if it's too close to a vertical edge
-             v[i].hitVertCushion();///ricochets sideways
-             std::cout<<"A ricosat din verticala\n";
-           }
-           if(cy<R||cy+R>l){///all the same, ricochets
-             v[i].hitHorizCushion();
-             std::cout<<"A ricosat din orizontala\n";
-           }
-           ///check if ball is potted
-           if( (cx-0.5*R<0 && cy-0.5*R<0) || (cx-0.5*R<0 && cy+0.5*R>l)
-           ||  (cx+0.5*R>L && cy+0.5*R>l) || (cx+0.5*R>L && cy-0.5*R<0) ){ ///if the center is very close to a pocket, the ball is potted
+           if( (cx-R<0 && cy-R<0) || (cx-R<0 && cy+R>l)
+           ||  (cx+R>L && cy+R>l) || (cx+R>L && cy-R<0) ){ ///if the center is very close to a pocket, the ball is potted
               if(v[i].getNo()==0){///if we pot the cue ball
                 std::cout<<"Ai bagat alba, se repune de la centru\n";
                 Ball newCueBall(0, L/2, l/2, 0.15, 0.1, 0.15, Vector(0, 0));///replace the cue ball mid-board
@@ -172,17 +162,25 @@ public:
                  std::cout<<"Ai bagat bila "<<i<<" \n";
               }
            }
+           if(cx<R||cx+R>L){///if it's too close to a vertical edge
+             v[i].hitVertCushion();///ricochets sideways
+             //std::cout<<"A ricosat din verticala\n";
+           }
+           if(cy<R||cy+R>l){///all the same, ricochets
+             v[i].hitHorizCushion();
+             //std::cout<<"A ricosat din orizontala\n";
+           }
        }
     }
     ///rule of three for the tables
-    Table(const Table &other): L(other.L), l(other.l), pocketSize(other.pocketSize), v(other.v), balls(v.size()){ }
+    Table(const Table &other): L(other.L), l(other.l), pocketSize(other.pocketSize), v(other.v){ }
 
     Table operator=(Table &other){
         L=other.L, l=other.l;
         return *this;
     }
     ~Table(){
-        L=0, l=0, balls=0, pocketSize=0;
+        L=0, l=0, pocketSize=0;
         v.clear();
     }
     friend std::ostream &operator <<(std::ostream &out, Table t);
