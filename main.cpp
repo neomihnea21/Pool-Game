@@ -7,6 +7,8 @@ class Vector{
     double x, y;
 public:
     Vector(double x_=0, double y_=0): x(x_), y(y_) {}
+    void setX(double x_){ x=x_; }
+    void setY(double y_){y=y_; } 
     double getX() const{
         return x;
     }
