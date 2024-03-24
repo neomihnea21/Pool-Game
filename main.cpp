@@ -1,4 +1,4 @@
-#include<iostream>
+S#include<iostream>
 #include<vector>
 #include<fstream>
 #include<cmath>
@@ -179,6 +179,7 @@ public:
 
     Table operator=(Table &other){
         L=other.L, l=other.l;
+        pocketSize=other.pocketSize; v=other.v;
         return *this;
     }
     ~Table(){
