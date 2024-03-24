@@ -1,4 +1,4 @@
-# Pool-Game
+Pool Game
 Joc de biliard in CPP, cu interfata text, dezvoltat folosind concepte de OOP.
-Control: la fiecare lovitura, se introduce puterea loviturii de tac pe Ox si Oy, bila este lovita, si consecintele au loc. 
-Jocul se incheie cand se baga bila finala.
+Pentru moment, exista o versiune "demo", care se opreste dupa un numar fix de lovituri (acum este 5, dar se poate schimba)
+Functionalitati: lovirea bilei albe, coliziunea intre bile, ricoseul din margine, introducerea in buzunar.
