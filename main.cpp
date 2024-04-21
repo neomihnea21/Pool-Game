@@ -70,7 +70,6 @@ protected:
 public:
     Ball(int no_=1, double x_=0, double y_=0, double r_=0, double m_=0, double mu_=0, Vector v_=0):
         no(no_), x(x_), y(y_), r(r_), m(m_), mu(mu_), v(v_) {}
- protected: ///singurul loc de unde se trage in bila e derivata cueBall, de-asta e protected
     virtual void shootBall(double vx, double vy) {};//nu o sa fie nevoie niciodata de o bila care nu e alba, obiect sau finala
  public:
     virtual void potBall() {};//doar alba da override - restul sunt prea la fel, finala e tot o culoare
@@ -147,10 +146,10 @@ class cueBall: public Ball{
 };//in the end, singura bila cu metode speciale este alba
 class Table{
     double L, l, pocketSize;
-    cueBall whiteBall; 
-    std::vector<Ball> v;
+    std::vector<Ball*> v;
+    int ctBalls;///NOTA: pe asta fa-l static
 public:
-    Table(double length=0, double width=0, double pocketSize=0, std::vector<Ball>vt={}){
+    Table(double length=0, double width=0, double pocketSize=0, std::vector<Ball*>vt={}){
        L=length, l=width;
        v=vt;
     }
@@ -158,20 +157,14 @@ public:
         return std::make_pair(L, l);
     }
     void shot(int vx, int vy){
-        whiteBall.shootBall(vx, vy);
+        v[0]->shootBall(vx, vy);
     }
     Ball getBall(int i){
           if(i<v.size())
-            return v[i];///arunca o exceptie daca lovim bila care nu exista, dar cine s-o prinda?
+            return *v[i];///arunca o exceptie daca lovim bila care nu exista, dar cine s-o prinda?
     }
-    const cueBall& getWhiteBall(){
-        return whiteBall;
-    }
-    void addBall(Ball b){
+    void addBall(Ball *b){///asta trb sa poata fi chemata si cu cueBall
         v.push_back(b);
-    }
-    void addCueBall(cueBall c){
-        whiteBall=c;
     }
     int getBallCount(){
         return v.size();
@@ -181,40 +174,25 @@ public:
         return (relativePos.modul()<b2.getR()+b1.getR());///TODO fa razele statice
     }
     void runShot(){
-       int ctBalls=v.size();
-       whiteBall.moveBall();
-       for(int i=0; i<ctBalls; i++){///trebuie sa rulam testele separat pentru alba
-          if(inRange(whiteBall, v[i])) whiteBall.collide(v[i]);//upcasting - am dat bila alba
-       }
-       ///acum, e nevoie sa facem operatiunile aferente si pentru alba, care e mai cu mot
-       double whiteX=whiteBall.getX(), whiteY=whiteBall.getY(), rad=whiteBall.getR();
-       if((whiteX-rad<0 && whiteY-rad<0) || (whiteX-rad<0 && whiteY+rad>l) ||
-          (whiteX+rad>L && whiteY-rad<0) || (whiteX+rad>L && whiteY+rad>l)){
-             whiteBall.potBall();
-          }
-        if(whiteX<rad || whiteY+rad>L)
-            whiteBall.hitVertCushion();
-
-        if(whiteY<rad || whiteY+rad>l)
-            whiteBall.hitHorizCushion();
+       ctBalls=v.size();
        for(int i=0; i<ctBalls; i++){///we move the balls one at a time
-           v[i].moveBall();
+           v[i]->moveBall();///UPCASTING PESTE TOT PE AICI, cand se refera la pointerul catre alba
            for(int j=0; j<ctBalls; j++){
-              Vector dist=Vector(v[j].getX()-v[i].getX(), v[j].getY()-v[i].getY());
-              if(dist.modul()<v[j].getR()+v[i].getR() && i!=j)
-                 v[i].collide(v[j]);
+              Vector dist=Vector(v[j]->getX()-v[i]->getX(), v[j]->getY()-v[i]->getY());
+              if(dist.modul()<v[j]->getR()+v[i]->getR() && i!=j)
+                 (*v[i]).collide(*v[j]);
            }
-           double cx=v[i].getX(), cy=v[i].getY(), R=v[i].getR();///extract coordinates, to easily check cushion ricochet
+           double cx=v[i]->getX(), cy=v[i]->getY(), R=v[i]->getR();///extract coordinates, to easily check cushion ricochet
            if( (cx-R<0 && cy-R<0) || (cx-R<0 && cy+R>l)
            ||  (cx+R>L && cy+R>l) || (cx+R>L && cy-R<0) ){ ///if the center is very close to a pocket, the ball is potted
-              v[i].potBall();
+              v[i]->potBall();
            }
            if(cx<R||cx+R>L){///if it's too close to a vertical edge
-             v[i].hitVertCushion();///ricochets sideways
+             v[i]->hitVertCushion();///ricochets sideways
              //std::cout<<"A ricosat din verticala\n";
            }
            if(cy<R||cy+R>l){///all the same, ricochets
-             v[i].hitHorizCushion();
+             v[i]->hitHorizCushion();
              //std::cout<<"A ricosat din orizontala\n";
            }
        }
@@ -233,9 +211,9 @@ public:
     }
     void writeBalls(){
        std::cout<<"Avem bilele urmatoare:\n";
-       std::cout<<"Bila alba la "<<whiteBall;
-       for(int i=0; i<v.size(); i++){ ///nu or sa apara bile albe pe aici
-          std::cout<<"Bila "<<v[i].getNo()<<" la "<<v[i];
+       std::cout<<"Bila alba la "<<*v[0];
+       for(int i=1; i<v.size(); i++){ ///nu or sa apara bile albe pe aici
+          std::cout<<"Bila "<<v[i]->getNo()<<" la "<<(*v[i]);
         }
     }
     friend std::ostream &operator <<(std::ostream &out, Table t);
@@ -250,20 +228,20 @@ std::ostream &operator <<(std::ostream &out, Table t){
 int main(){///TODO see what speeds we should impart
     std::ifstream fin("balls.txt");
     int ballCount; double tableLength, tableWidth;
-    cueBall c1;
+    cueBall c1; ///o vom citi separat, ca e altfel de bila
     fin>>ballCount>>tableLength>>tableWidth;
+    Table t(tableLength, tableWidth, 0);
     fin>>c1;
-    Table t(tableLength, tableWidth, 0.0);///10 units long, 7 units wide -subject to change
-    t.addCueBall(c1);///stiu ca e idiot, dar ei ii trebuie bila transferata altfel
+    t.addBall(&c1);///UPCASTING AICI
     double topSpeed=0;
     for(int i=0; i<ballCount; i++){
         Ball b;
         fin>>b;
-        t.addBall(b);
+        t.addBall(&b);
         topSpeed=std::max(topSpeed, b.getSpeed());///initial configuration of the balls
     }
     ///the actual game loop
-    t.writeBalls();
+    t.writeBalls();///GET. IN. THERE! a mers cu pointeri
     int shots=0;
     while(t.getBallCount()>0&&shots<5){
        std::cout<<"Trageti in bila alba, dati puterea pe x si pe y: \n";
