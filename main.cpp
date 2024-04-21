@@ -3,12 +3,25 @@
 #include<fstream>
 #include<cmath>
 #include<queue>
-class Vector{
+#include<stdexcept>
+class outOfBounds: public std::exception{
+    using std::exception::exception;
+};
+class Display{
+    protected:
+      virtual void print(std::ostream &out) const =0;
+    friend std::ostream& operator<<(std::ostream &out, const Display &display);
+};
+std::ostream& operator<<(std::ostream &out, const Display &display){
+    display.print(out);
+    return out;///supraincarc scrierea in BAZA, derivate o iau de aici
+}
+class Vector: public Display{
     double x, y;
 public:
     Vector(double x_=0, double y_=0): x(x_), y(y_) {}
     void setX(double x_){ x=x_; }
-    void setY(double y_){y=y_; } 
+    void setY(double y_){y=y_; }
     double getX() const{
         return x;
     }
@@ -38,30 +51,29 @@ public:
         Vector v2(x-other.x, y-other.y);
         return v2;
     }
-    friend std::ostream& operator <<(std::ostream &out, Vector &v);
+    void print(std::ostream &out) const override{
+         out<<x<<" "<<y<<"\n";
+    }
     friend std::istream& operator >>(std::istream &in, Vector &v);
     ///for some reason, the vector's custom = fucks with everything
 };
-std::ostream& operator<<(std::ostream &out, Vector v){
-    out<<v.getX()<<" "<<v.getY()<<" ";
-    return out;
-}
 std::istream& operator >>(std::istream &in, Vector &v){
     in>>v.x>>v.y;
     return in;
 }
-class Ball{
+class Ball: public Display{
+protected:
     int no;
     double x, y, r, m, mu;///coordinates, radius, mass, sfc
     Vector v;
-    double pi=3.14, dt=0.01, g=9.81, EPS=0.3; ///nu sunt statice, ca mai sunt probleme
+    double pi=3.14, dt=0.01, g=9.81, EPS=0.3; ///timpul nu curge diferit pentru bile diferite, si nici acceleratia gravitationala nu e alta
 public:
     Ball(int no_=1, double x_=0, double y_=0, double r_=0, double m_=0, double mu_=0, Vector v_=0):
         no(no_), x(x_), y(y_), r(r_), m(m_), mu(mu_), v(v_) {}
-    void shootBall(int vx, int vy){///todo asta sa apara doar in clasa derivata cueBall, singura in care se poate da
-        Vector copie(vx, vy);
-        v=copie;
-    }
+ protected: ///singurul loc de unde se trage in bila e derivata cueBall, de-asta e protected
+    virtual void shootBall(double vx, double vy) {};//nu o sa fie nevoie niciodata de o bila care nu e alba, obiect sau finala
+ public:
+    virtual void potBall() {};//doar alba da override - restul sunt prea la fel, finala e tot o culoare
     double getX() const{
         return x;
     }
@@ -109,19 +121,33 @@ public:
         Vector newV2=centerLine.times(v1x), newRad2=radicalAxis.times(v2y);
         v=newV1+newRad1, other.v=newV2+newRad2;///I can't add vectors freely, since rvalues are references and lvalues aren't
     }
-    friend std::ostream& operator<<(std::ostream &out, Ball b);
-    friend std::istream& operator>>(std::istream &in, Ball &b);
+    void print(std::ostream &out)const override{
+        out<<x<<" "<<y<<"\n";
+    }
+    friend std::istream& operator >>(std::istream &in, Ball &b);
 };
-std::ostream& operator<<(std::ostream& out, Ball b){///scrie bila
-    out<<b.x<<" "<<b.y<<"\n";
-    return out;
-}
 std::istream& operator>>(std::istream& in, Ball &b){
     in>>b.no>>b.x>>b.y>>b.r>>b.m>>b.mu>>b.v;
     return in;
 }
+class cueBall: public Ball{
+    public:
+    cueBall(int no_=0, double x_=0, double y_=0, double r_=0.15, double m_=0.15, double mu_=0.1, Vector V_=Vector(0, 0)):
+      Ball(no_, x_, y_, r_, m_, mu_, V_) {}
+    void shootBall(double vx, double vy) override{
+        Vector vt(vx, vy);///vector de unique_pointer catre ball
+        v=vt;
+    }
+    void potBall() override{
+         std::cout<<"Ai bagat alba, se repune de la centru:";
+         cueBall newCue=cueBall(0, 5, 3.5, 0.15, 0.15, 0.1, Vector(0, 0));///TODO scoate numerele magice
+         *this=newCue;///ar trebui sa o schimbe
+    }
+    //friend std::ostream &operator <<(std::ostream &out, cueBall &c);///pentru ca face figuri cu printul din abstract, ii dam in dulcele stil clasic
+};//in the end, singura bila cu metode speciale este alba
 class Table{
     double L, l, pocketSize;
+    cueBall whiteBall; 
     std::vector<Ball> v;
 public:
     Table(double length=0, double width=0, double pocketSize=0, std::vector<Ball>vt={}){
@@ -131,20 +157,46 @@ public:
     std::pair<double, double> getSize(){
         return std::make_pair(L, l);
     }
-    void shot(int i, int vx, int vy){
-        v[i].shootBall(vx, vy);
+    void shot(int vx, int vy){
+        whiteBall.shootBall(vx, vy);
     }
     Ball getBall(int i){
-            return v[i];///how do we deal with asking for nonexistent balls
+          if(i<v.size())
+            return v[i];///arunca o exceptie daca lovim bila care nu exista, dar cine s-o prinda?
+    }
+    const cueBall& getWhiteBall(){
+        return whiteBall;
     }
     void addBall(Ball b){
         v.push_back(b);
     }
+    void addCueBall(cueBall c){
+        whiteBall=c;
+    }
     int getBallCount(){
         return v.size();
     }
+    bool inRange(Ball &b1, Ball &b2){
+        Vector relativePos=Vector(b2.getX()-b1.getX(), b2.getY()-b1.getY());
+        return (relativePos.modul()<b2.getR()+b1.getR());///TODO fa razele statice
+    }
     void runShot(){
        int ctBalls=v.size();
+       whiteBall.moveBall();
+       for(int i=0; i<ctBalls; i++){///trebuie sa rulam testele separat pentru alba
+          if(inRange(whiteBall, v[i])) whiteBall.collide(v[i]);//upcasting - am dat bila alba
+       }
+       ///acum, e nevoie sa facem operatiunile aferente si pentru alba, care e mai cu mot
+       double whiteX=whiteBall.getX(), whiteY=whiteBall.getY(), rad=whiteBall.getR();
+       if((whiteX-rad<0 && whiteY-rad<0) || (whiteX-rad<0 && whiteY+rad>l) ||
+          (whiteX+rad>L && whiteY-rad<0) || (whiteX+rad>L && whiteY+rad>l)){
+             whiteBall.potBall();
+          }
+        if(whiteX<rad || whiteY+rad>L)
+            whiteBall.hitVertCushion();
+
+        if(whiteY<rad || whiteY+rad>l)
+            whiteBall.hitHorizCushion();
        for(int i=0; i<ctBalls; i++){///we move the balls one at a time
            v[i].moveBall();
            for(int j=0; j<ctBalls; j++){
@@ -155,14 +207,7 @@ public:
            double cx=v[i].getX(), cy=v[i].getY(), R=v[i].getR();///extract coordinates, to easily check cushion ricochet
            if( (cx-R<0 && cy-R<0) || (cx-R<0 && cy+R>l)
            ||  (cx+R>L && cy+R>l) || (cx+R>L && cy-R<0) ){ ///if the center is very close to a pocket, the ball is potted
-              if(v[i].getNo()==0){///if we pot the cue ball
-                std::cout<<"Ai bagat alba, se repune de la centru\n";
-                Ball newCueBall(0, L/2, l/2, 0.15, 0.1, 0.15, Vector(0, 0));///replace the cue ball mid-board
-                v[0]=newCueBall;///and move it over
-              }
-              else{
-                 std::cout<<"Ai bagat bila "<<i<<" \n";
-              }
+              v[i].potBall();
            }
            if(cx<R||cx+R>L){///if it's too close to a vertical edge
              v[i].hitVertCushion();///ricochets sideways
@@ -175,7 +220,7 @@ public:
        }
     }
     ///rule of three for the tables
-    Table(const Table &other): L(other.L), l(other.l), pocketSize(other.pocketSize), v(other.v){ }
+    //Table(const Table &other): L(other.L), l(other.l), pocketSize(other.pocketSize), whiteBall(other.whiteBall), v(other.v){ }
 
     Table operator=(Table &other){
         L=other.L, l=other.l;
@@ -186,6 +231,13 @@ public:
         L=0, l=0, pocketSize=0;
         v.clear();
     }
+    void writeBalls(){
+       std::cout<<"Avem bilele urmatoare:\n";
+       std::cout<<"Bila alba la "<<whiteBall;
+       for(int i=0; i<v.size(); i++){ ///nu or sa apara bile albe pe aici
+          std::cout<<"Bila "<<v[i].getNo()<<" la "<<v[i];
+        }
+    }
     friend std::ostream &operator <<(std::ostream &out, Table t);
 };
 std::ostream &operator <<(std::ostream &out, Table t){
@@ -195,20 +247,15 @@ std::ostream &operator <<(std::ostream &out, Table t){
     }
     return out;
 }
-void writeBalls(Table t){
-    std::cout<<"Avem bilele urmatoare:\n";
-    for(int i=0; i<t.getBallCount(); i++){
-      if(t.getBall(i).getNo()==0)///cue ball is always 0
-        std::cout<<"Bila alba la "<<t.getBall(i);
-      else
-        std::cout<<"Bila "<<i<<" la "<<t.getBall(i);
-    }
-}
 int main(){///TODO see what speeds we should impart
     std::ifstream fin("balls.txt");
-    Table t(10, 7);///10 units long, 7 units wide -subject to change
+    int ballCount; double tableLength, tableWidth;
+    cueBall c1;
+    fin>>ballCount>>tableLength>>tableWidth;
+    fin>>c1;
+    Table t(tableLength, tableWidth, 0.0);///10 units long, 7 units wide -subject to change
+    t.addCueBall(c1);///stiu ca e idiot, dar ei ii trebuie bila transferata altfel
     double topSpeed=0;
-    int ballCount; fin>>ballCount;
     for(int i=0; i<ballCount; i++){
         Ball b;
         fin>>b;
@@ -216,12 +263,12 @@ int main(){///TODO see what speeds we should impart
         topSpeed=std::max(topSpeed, b.getSpeed());///initial configuration of the balls
     }
     ///the actual game loop
-    writeBalls(t);
+    t.writeBalls();
     int shots=0;
     while(t.getBallCount()>0&&shots<5){
        std::cout<<"Trageti in bila alba, dati puterea pe x si pe y: \n";
        double vx, vy; std::cin>>vx>>vy;
-       t.shot(0, vx, vy);///trebuie ssa copiem toata bila, ceea ce e otara lent, dar ok
+       t.shot(vx, vy);///trebuie sa copiem toata bila, ceea ce e otara lent, dar ok
        topSpeed=t.getBall(0).getSpeed();
        while(topSpeed>0){
          t.runShot();
@@ -230,10 +277,10 @@ int main(){///TODO see what speeds we should impart
             topSpeed=std::max(topSpeed, t.getBall(i).getSpeed());
          }
       }
-      writeBalls(t);///ok, pare sa plimbe bila alba pe teren, acum sa punem si restul
+      t.writeBalls();///ok, pare sa plimbe bila alba pe teren, acum sa punem si restul
       shots++;
     }
     Table t2(t);///quick 2-liner to test copy constructors
-    writeBalls(t2);
+    t2.writeBalls();
     return 0;
 }
