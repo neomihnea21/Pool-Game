@@ -4,11 +4,15 @@
 #include<cmath>
 #include<queue>
 #include<stdexcept>
-class outOfBounds: public std::exception{///e o exceptie care scrie un string si anuleaza actiunea, i. e. randul
-    std::string context;
+#include<unordered_set>
+#include<algorithm>
+#include<memory>
+template<class T>
+class outOfBounds: public std::exception{///e o exceptie care scrie un string si anuleaza actiunea, i. e. randul celui care da
+    T context;
     public:
-      outOfBounds(std::string Context_=""): context(Context_) {}
-      std::string what(){
+      outOfBounds(T Context_): context(Context_) {}
+      T what(){
           return context;
       }
 };
@@ -51,12 +55,12 @@ public:
         Vector v2(x*k, y*k);
         return v2;
     }
-    Vector operator+(Vector &other){
-        Vector v2(x+other.x, y+other.y);
+    Vector operator+(std::reference_wrapper<Vector> other){
+        Vector v2(x+other.get().x, y+other.get().y);
         return v2;
     }
-    Vector operator-(Vector &other){
-        Vector v2(x-other.x, y-other.y);
+    Vector operator-(std::reference_wrapper<Vector> other){
+        Vector v2(x-other.get().x, y-other.get().y);
         return v2;
     }
     void print(std::ostream &out) const override{
@@ -69,7 +73,7 @@ std::istream& operator >>(std::istream &in, Vector &v){
     in>>v.x>>v.y;
     return in;
 }
-class Ball: public Display{
+class Ball: public Display{///DESIGN PATTERNS - asta e factory de dispalyuri, si in acelasi timp fatada.
 protected:
     int no;
     double x, y, r, m, mu;///coordinates, radius, mass, sfc
@@ -145,11 +149,11 @@ class cueBall: public Ball{
     cueBall(int no_=0, double x_=0, double y_=0, double r_=0.15, double m_=0.15, double mu_=0.1, Vector V_=Vector(0, 0)):
       Ball(no_, x_, y_, r_, m_, mu_, V_) {}
     void shootBall(double vx, double vy) override{
-        Vector vt(vx, vy);///vector de unique_pointer catre ball
+        Vector vt(vx, vy);
         v=vt;
     }
     void potBall() override{
-         std::cout<<"Ai bagat alba, se repune de la centru:";
+         std::cout<<"Ai bagat alba, se repune de la centru:\n";
          cueBall newCue=cueBall(0, 5, 3.5, 0.15, 0.15, 0.1, Vector(0, 0));///TODO scoate numerele magice
          *this=newCue;///ar trebui sa o schimbe
     }
@@ -162,10 +166,14 @@ class regularBall: public Ball{
         std::cout<<"Ai bagat bila "<<no<<"\n";
     }
 };
+bool compareBalls(Ball* b1, Ball* b2){///functie libera, vom sorta bilele la fiecare faza
+    return b1->getNo()<b2->getNo();
+}
 class Table{
     double L, l, pocketSize;
-    std::vector<Ball*> v;
-    int ctBalls;///NOTA: pe asta fa-l static
+    std::vector<Ball* > v;
+    std::unordered_set<int> pottedBalls;
+    int ctBalls;
 public:
     Table(double length=0, double width=0, double pocketSize=0, std::vector<Ball*>vt={}){
        L=length, l=width;
@@ -175,20 +183,20 @@ public:
         return std::make_pair(L, l);
     }
     void shot(int vx, int vy){
-         Vector momentumVector=Vector(vx, vy);
-         if(momentumVector.modul()<30)
-           v[0]->shootBall(vx, vy);///RUNTIME POLYMORPHISM HERE
+         Vector velocity=Vector(vx, vy);
+         if(velocity.modul()<30)
+           v[0]->shootBall(vx, vy);///RUNTIME POLYMORPHISM aici, daca e alba trage in ea, daca e culoare nu face nimic
          else{
-            throw outOfBounds("Ai spart masa\n");
+            throw outOfBounds<std::string>("Ai spart masa\n");
          }
     }
     Ball getBall(int i){
-          if(i<v.size())
-            return *v[i];///arunca o exceptie daca lovim bila care nu exista, dar cine s-o prinda?
+          if(i<v.size()&&i>=0)
+            return *v[i];///arunca o exceptie daca lovim bila care nu exista
           else
-            throw outOfBounds("A testat o bila care nu exista\n");
+            throw outOfBounds<std::string>("A testat o bila care nu exista\n");
     }
-    void addBall(Ball *b){///asta trb sa poata fi chemata si cu cueBall
+    void addBall(Ball* b){///asta trb sa poata fi chemata si cu cueBall
         v.push_back(b);
     }
     int getBallCount(){
@@ -207,6 +215,7 @@ public:
            if( (cx-R<0 && cy-R<0) || (cx-R<0 && cy+R>l)
            ||  (cx+R>L && cy+R>l) || (cx+R>L && cy-R<0) ){ ///if the center is very close to a pocket, the ball is potted
               v[i]->potBall(); ///might be RUNTIME POLYMORPHISM
+              pottedBalls.insert(v[i]->getNo());
            }
            if(cx<R||cx+R>L){///if it's too close to a vertical edge
              v[i]->hitVertCushion();///ricochets sideways
@@ -217,10 +226,11 @@ public:
              //std::cout<<"A ricosat din orizontala\n";
            }
        }
+       ///sortam bilele dupa numere - stiu ca e un nlog(n) in plus pe frame care nu prea e necesar, dar e necesar pentru tema
+       std::sort(v.begin(), v.end(), compareBalls); 
     }
     ///rule of three for the tables
     //Table(const Table &other): L(other.L), l(other.l), pocketSize(other.pocketSize), whiteBall(other.whiteBall), v(other.v){ }
-
     Table operator=(Table &other){
         L=other.L, l=other.l;
         pocketSize=other.pocketSize; v=other.v;
@@ -246,6 +256,45 @@ std::ostream &operator <<(std::ostream &out, Table t){
     }
     return out;
 }
+class Game{
+    private: 
+      std::unique_ptr<Table> t;
+      double topSpeed;
+      static Game* gamePtr;
+    public:
+       Game(Table &t_, double topSpeed_){
+            t=std::make_unique<Table>(t_);
+            topSpeed=topSpeed_;
+       }
+       void runGame(){
+             int shots=0;
+             while(t->getBallCount()>0&&shots<5){
+                std::cout<<"Trageti in bila alba, dati puterea pe x si pe y: \n";
+                double vx, vy; std::cin>>vx>>vy;
+                try{
+                    t->shot(vx, vy);///trebuie sa copiem toata bila, ceea ce e otara lent, dar ok
+                }
+                catch(outOfBounds<std::string> &e){
+                    std::cout<<e.what();
+                }
+                topSpeed=t->getBall(0).getSpeed();
+                while(topSpeed>0){
+                    t->runShot();
+                    topSpeed=0;
+                    try{///ar trebui sa mearga normal desi e cam weird
+                    for(int i=0; i<t->getBallCount(); i++){
+                        topSpeed=std::max(topSpeed, t->getBall(i).getSpeed());
+                    }
+                    }
+                    catch(outOfBounds<std::string> &e){
+                        std::cout<<e.what();
+                    }
+                }
+                t->writeBalls();
+                shots++;
+            }
+       }
+};
 double Ball::pi=3.14;
 double Ball::g=9.81;
 double Ball::EPS=0.3;
@@ -257,42 +306,16 @@ int main(){///TODO see what speeds we should impart
     fin>>ballCount>>tableLength>>tableWidth;
     Table t(tableLength, tableWidth, 0);
     fin>>c1;
-    t.addBall(&c1);///UPCASTING AICI
+    t.addBall(&c1);
     double topSpeed=0;
-    for(int i=0; i<ballCount; i++){
+    for(int i=0; i<ballCount; i++){///physics engine-ul face niste figuri rele de tot, TODO vezi ce are
         regularBall b;
         fin>>b;
-        t.addBall(&b);///UPCASTING AICI
+        t.addBall(&b);
         topSpeed=std::max(topSpeed, b.getSpeed());///initial configuration of the balls
     }
-    ///the actual game loop
-    t.writeBalls();
-    int shots=0;
-    while(t.getBallCount()>0&&shots<5){
-       std::cout<<"Trageti in bila alba, dati puterea pe x si pe y: \n";
-       double vx, vy; std::cin>>vx>>vy;
-       try{
-         t.shot(vx, vy);///trebuie sa copiem toata bila, ceea ce e otara lent, dar ok
-       }
-       catch(outOfBounds &e){
-           std::cout<<e.what();
-       }
-       topSpeed=t.getBall(0).getSpeed();
-       while(topSpeed>0){
-         t.runShot();
-         topSpeed=0;
-         try{///ar trebui sa mearga normal desi e cam weird
-           for(int i=0; i<ballCount; i++){
-              topSpeed=std::max(topSpeed, t.getBall(i).getSpeed());
-           }
-         }
-         catch(outOfBounds &e){
-            std::cout<<e.what();
-         }
-      }
-      t.writeBalls();
-      shots++;
-    }
+    Game myPoolGame(t, topSpeed);
+    myPoolGame.runGame();
     Table t2(t);///quick 2-liner to test copy constructors
     t2.writeBalls();
     return 0;
