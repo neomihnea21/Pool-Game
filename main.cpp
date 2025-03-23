@@ -309,10 +309,10 @@ int main(){///TODO see what speeds we should impart
     t.addBall(&c1);
     double topSpeed=0;
     for(int i=0; i<ballCount; i++){///physics engine-ul face niste figuri rele de tot, TODO vezi ce are
-        regularBall b;
-        fin>>b;
-        t.addBall(&b);
-        topSpeed=std::max(topSpeed, b.getSpeed());///initial configuration of the balls
+        regularBall *b=new regularBall();
+        fin>>(*b);
+        t.addBall(b);
+        topSpeed=std::max(topSpeed, b->getSpeed());///initial configuration of the balls
     }
     Game myPoolGame(t, topSpeed);
     myPoolGame.runGame();
